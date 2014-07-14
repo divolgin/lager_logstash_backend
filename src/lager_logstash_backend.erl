@@ -58,14 +58,7 @@ init(Params) ->
          {module, [{encoding, atom}]}
      ],
 
- {Socket, Address} =
-   case inet:getaddr(Popcorn_Host, inet) of
-     {ok, Addr} ->
-       {ok, Sock} = gen_udp:open(0, [list]),
-       {Sock, Addr};
-     {error, _Err} ->
-       {undefined, undefined}
-   end,
+ {Socket, Address} = connect(Popcorn_Host),
 
   {ok, #state{socket = Socket,
               lager_level_type = Lager_Level_Type,
@@ -77,6 +70,13 @@ init(Params) ->
               node_role = Node_Role,
               node_version = Node_Version,
               metadata = Metadata}}.
+
+handle_call({set_host, Host, Port}, State) ->
+  {Socket, Address} = connect(Host),
+  {ok, ok, State#state{socket = Socket,
+                       logstash_host = Host,
+                       logstash_port = Port,
+                       logstash_address = Address}};
 
 handle_call({set_loglevel, Level}, State) ->
   {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
@@ -182,3 +182,16 @@ encode_value(Val) when is_integer(Val) -> list_to_binary(integer_to_list(Val));
 encode_value(Val) when is_number(Val) -> list_to_binary(lists:flatten(io_lib:format("~p", [Val])));
 encode_value(Val) when is_binary(Val) -> Val;
 encode_value(_) -> <<"encoding_error">>.
+
+
+connect(Host) when is_binary(Host) ->
+  connect(binary_to_list(Host));
+connect(Host) when is_list(Host) ->
+  case inet:getaddr(Host, inet) of
+     {ok, Addr} ->
+       {ok, Sock} = gen_udp:open(0, [list]),
+       {Sock, Addr};
+     {error, _Err} ->
+       {undefined, undefined}
+   end;
+connect(_Host) -> {undefined, undefined}.
